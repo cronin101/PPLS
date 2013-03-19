@@ -100,6 +100,37 @@ distribute_stack_to_workers(stack *stack, const int numprocs) {
 }
 
 double
+process_worker_responses(stack *stack, const int workers_with_tasks) {
+  double workers_area = 0;
+  int worker_number = 0;
+
+  while (worker_number++ <= workers_with_tasks) {
+    int has_result;
+    MPI_Recv(&has_result, 1, MPI_INT, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
+
+    // Accurate segment results increment total area.
+    if (has_result) {
+      double segment_area;
+      MPI_Recv(&segment_area, 1, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
+
+      workers_area += segment_area;
+
+    // Inaccurate segment results split segment in two for next iteratation of job distribution.
+    } else {
+      double start, midpoint, end;
+      double endpoints[2];
+      MPI_Recv(&endpoints, 2, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
+      start = endpoints[0]; end = endpoints[1]; midpoint = (start + end) / 2;
+
+      push_endpoints_onto_stack(start, midpoint, stack);
+      push_endpoints_onto_stack(midpoint, end, stack);
+    }
+  }
+
+  return workers_area;
+}
+
+double
 farmer(const int numprocs) {
   double total_area = 0;
 
@@ -110,30 +141,8 @@ farmer(const int numprocs) {
 
     int workers_with_tasks = distribute_stack_to_workers(stack, numprocs);
 
-    // Receive response from utilised workers.
-    int worker_number = 0;
-    while (worker_number++ <= workers_with_tasks) {
-      int has_result;
-      MPI_Recv(&has_result, 1, MPI_INT, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
-
-      // Accurate segment results increment total area.
-      if (has_result) {
-        double segment_area;
-        MPI_Recv(&segment_area, 1, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
-
-        total_area += segment_area;
-
-      // Inaccurate segment results split segment in two for next iteratation of job distribution.
-      } else {
-        double start, midpoint, end;
-        double endpoints[2];
-        MPI_Recv(&endpoints, 2, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
-        start = endpoints[0]; end = endpoints[1]; midpoint = (start + end) / 2;
-
-        push_endpoints_onto_stack(start, midpoint, stack);
-        push_endpoints_onto_stack(midpoint, end, stack);
-      }
-    }
+    int new_area = process_worker_responses(stack, workers_with_tasks);
+    total_area += new_area;
   }
 }
 
