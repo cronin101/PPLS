@@ -11,8 +11,8 @@
 
 #define SLEEPTIME 1
 
-#define WORKTAG 0
-#define DIETAG 1
+#define WORK_TAG 0
+#define DIE_TAG 1
 
 int *tasks_per_process;
 
@@ -93,7 +93,7 @@ distribute_stack_to_workers(stack *stack, const int numprocs) {
 
     workers_with_tasks++;
     tasks_per_process[worker_number]++;
-    MPI_Send(params, 5, MPI_DOUBLE, worker_number, WORKTAG, MPI_COMM_WORLD);
+    MPI_Send(params, 5, MPI_DOUBLE, worker_number, WORK_TAG, MPI_COMM_WORLD);
   }
 
   return workers_with_tasks;
@@ -138,7 +138,6 @@ farmer(const int numprocs) {
   push_endpoints_onto_stack(A, B, stack);
 
   while (!is_empty(stack)) {
-
     int workers_with_tasks = distribute_stack_to_workers(stack, numprocs);
 
     int new_area = process_worker_responses(stack, workers_with_tasks);
@@ -148,5 +147,35 @@ farmer(const int numprocs) {
 
 void
 worker(const int mypid) {
-  // You must complete this function
+  while (1) {
+    double *params;
+    double start, end, f_start, f_end, estimate, larea, rarea;
+    MPI_STATUS status;
+
+    MPI_Recv(params, 5, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
+    if (status->MPI_TAG == WORK_TAG) {
+      start = params[0]; end = params[1]; f_start = params[2]; f_end = params[3]; estimate = params[4];
+
+      mid = (start + end) / 2;
+      f_mid = F(mid);
+      larea = (f_start + f_mid) * (mid - start) / 2;
+      rarea = (f_mid + f_end) * (end - mid) / 2;
+
+      double segment_area = larea + rarea;
+
+      int accurate_enough = fabs((segment_area) - estimate) <= EPSILON;
+
+      MPI_Send(&accurate_enough, 1, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD);
+
+      if (accurate_enough) {
+        MPI_Send(&segment_area, 1, MPI_DOUBLE, 0, WORK_TAG, MPI_COMM_WORLD);
+      } else {
+        double endpoints[2] = { start, end };
+        MPI_Send(endpoints, 2, MPI_DOUBLE, 0, WORK_TAG, MPI_COMM_WORLD);
+      }
+    } else {
+      break;
+    }
+  }
 }
