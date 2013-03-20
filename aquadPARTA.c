@@ -73,6 +73,9 @@ main(int argc, char **argv) {
 #define WORK_TAG 0
 #define DIE_TAG 1
 
+#define ACCURATE_TAG 0
+#define INACCURATE_TAG 1
+
 void
 push_endpoints_onto_stack(const double start_point, const double end_point, stack *stack) {
   double boundaries[2] =  { start_point, end_point };
@@ -91,16 +94,11 @@ distribute_stack_to_workers(stack *stack, const int numprocs) {
     head = pop(stack);
     start = head[0]; end = head[1];
 
-    double f_start = F(start);
-    double f_end = F(end);
-
-    double estimate = (f_start + f_end) * (end - start) / 2;
-
-    double params[5] = { start, end, f_start, f_end, estimate };
+    double params[2] = { start, end };
 
     workers_with_tasks++;
     tasks_per_process[worker_number]++;
-    MPI_Send(params, 5, MPI_DOUBLE, worker_number, WORK_TAG, MPI_COMM_WORLD);
+    MPI_Send(params, 2, MPI_DOUBLE, worker_number, WORK_TAG, MPI_COMM_WORLD);
   }
 
   return workers_with_tasks;
@@ -112,22 +110,20 @@ process_worker_responses(stack *stack, const int workers_with_tasks) {
   int worker_number = 0;
 
   while (++worker_number <= workers_with_tasks) {
-    int has_result;
-    MPI_Recv(&has_result, 1, MPI_INT, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
+    MPI_Status status;
+    double buffer[2];
+    MPI_Recv(buffer, 2, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
     // Accurate segment results increment total area.
-    if (has_result) {
-      double segment_area;
-      MPI_Recv(&segment_area, 1, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
-
+    if (status.MPI_TAG == ACCURATE_TAG) {
+      double segment_area = buffer[0];
       workers_area += segment_area;
 
     // Inaccurate segment results split segment in two for next iteratation of job distribution.
     } else {
       double start, midpoint, end;
-      double endpoints[2];
-      MPI_Recv(&endpoints, 2, MPI_DOUBLE, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
-      start = endpoints[0]; end = endpoints[1]; midpoint = (start + end) / 2;
+      start = buffer[0]; end = buffer[1];
+      midpoint = (start + end) / 2;
 
       push_endpoints_onto_stack(start, midpoint, stack);
       push_endpoints_onto_stack(midpoint, end, stack);
@@ -142,8 +138,8 @@ release_all_workers(const int numprocs) {
   int worker_number = 0;
 
   while (++worker_number < numprocs) {
-    double params[5] = { 0., 0., 0., 0., 0. };
-    MPI_Send(params, 5, MPI_DOUBLE, worker_number, DIE_TAG, MPI_COMM_WORLD);
+    double params[2] = { 0., 0. };
+    MPI_Send(params, 2, MPI_DOUBLE, worker_number, DIE_TAG, MPI_COMM_WORLD);
   }
 }
 
@@ -168,14 +164,16 @@ farmer(const int numprocs) {
 void
 worker(const int mypid) {
   while (1) {
-    double params[5];
+    double params[2];
     double start, mid, end, f_start, f_mid, f_end, estimate, larea, rarea;
     MPI_Status status;
 
-    MPI_Recv(&params, 5, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Recv(params, 2, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
     if (status.MPI_TAG == WORK_TAG) {
-      start = params[0]; end = params[1]; f_start = params[2]; f_end = params[3]; estimate = params[4];
+      start = params[0]; end = params[1];
+      f_start = F(start); f_end = F(end);
+      estimate = (f_start + f_end) * (end - start) / 2;
 
       mid = (start + end) / 2;
       f_mid = F(mid);
@@ -184,15 +182,18 @@ worker(const int mypid) {
 
       double segment_area = larea + rarea;
 
-      int accurate_enough = fabs((segment_area) - estimate) <= EPSILON;
+      //usleep(SLEEPTIME);
 
-      MPI_Send(&accurate_enough, 1, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD);
+      int accurate_enough = fabs((segment_area) - estimate) <= EPSILON;
+      //MPI_Send(&accurate_enough, 1, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD);
 
       if (accurate_enough) {
-        MPI_Send(&segment_area, 1, MPI_DOUBLE, 0, WORK_TAG, MPI_COMM_WORLD);
+        params[0] = segment_area;;
+        MPI_Send(params, 2, MPI_DOUBLE, 0, ACCURATE_TAG, MPI_COMM_WORLD);
       } else {
-        double endpoints[2] = { start, end };
-        MPI_Send(endpoints, 2, MPI_DOUBLE, 0, WORK_TAG, MPI_COMM_WORLD);
+        params[0] = start;
+        params[1] = end;
+        MPI_Send(params, 2, MPI_DOUBLE, 0, INACCURATE_TAG, MPI_COMM_WORLD);
       }
     } else {
       break;
