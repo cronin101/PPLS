@@ -182,13 +182,12 @@ worker(const int mypid) {
 
       double segment_area = larea + rarea;
 
-      //usleep(SLEEPTIME);
+      usleep(SLEEPTIME);
 
       int accurate_enough = fabs((segment_area) - estimate) <= EPSILON;
-      //MPI_Send(&accurate_enough, 1, MPI_INT, 0, WORK_TAG, MPI_COMM_WORLD);
 
       if (accurate_enough) {
-        params[0] = segment_area;;
+        params[0] = segment_area;
         MPI_Send(params, 2, MPI_DOUBLE, 0, ACCURATE_TAG, MPI_COMM_WORLD);
       } else {
         params[0] = start;
