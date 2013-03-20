@@ -1,3 +1,6 @@
+/* Parallel Programming Language Semantics Coursework 2
+ * s0925570@sms.ed.ac.uk */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -11,14 +14,13 @@
 
 #define SLEEPTIME 1
 
-#define WORK_TAG 0
-#define DIE_TAG 1
-
 int *tasks_per_process;
 
 double farmer(const int);
 
 void worker(const int);
+
+/* BEGIN PROVIDED CODE */
 
 int
 main(int argc, char **argv) {
@@ -65,6 +67,11 @@ main(int argc, char **argv) {
   MPI_Finalize();
   return 0;
 }
+
+/* END PROVIDED CODE */
+
+#define WORK_TAG 0
+#define DIE_TAG 1
 
 void
 push_endpoints_onto_stack(const double start_point, const double end_point, stack *stack) {
