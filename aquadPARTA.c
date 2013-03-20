@@ -77,7 +77,7 @@ distribute_stack_to_workers(stack *stack, const int numprocs) {
   int worker_number = 0;
   int workers_with_tasks = 0;
 
-  while (worker_number++ <= numprocs) {
+  while (++worker_number < numprocs) {
     if (is_empty(stack)) break;
 
     double start, end, *head;
@@ -87,7 +87,7 @@ distribute_stack_to_workers(stack *stack, const int numprocs) {
     double f_start = F(start);
     double f_end = F(end);
 
-    double estimate = (f_start + f_end) * ((end - start) / 2);
+    double estimate = (f_start + f_end) * (end - start) / 2;
 
     double params[5] = { start, end, f_start, f_end, estimate };
 
@@ -104,7 +104,7 @@ process_worker_responses(stack *stack, const int workers_with_tasks) {
   double workers_area = 0;
   int worker_number = 0;
 
-  while (worker_number++ <= workers_with_tasks) {
+  while (++worker_number <= workers_with_tasks) {
     int has_result;
     MPI_Recv(&has_result, 1, MPI_INT, worker_number, MPI_ANY_TAG, MPI_COMM_WORLD, NULL);
 
@@ -130,6 +130,16 @@ process_worker_responses(stack *stack, const int workers_with_tasks) {
   return workers_area;
 }
 
+void
+release_all_workers(const int numprocs) {
+  int worker_number = 0;
+
+  while (++worker_number < numprocs) {
+    double params[5] = { 0., 0., 0., 0., 0. };
+    MPI_Send(params, 5, MPI_DOUBLE, worker_number, DIE_TAG, MPI_COMM_WORLD);
+  }
+}
+
 double
 farmer(const int numprocs) {
   double total_area = 0;
@@ -140,21 +150,24 @@ farmer(const int numprocs) {
   while (!is_empty(stack)) {
     int workers_with_tasks = distribute_stack_to_workers(stack, numprocs);
 
-    int new_area = process_worker_responses(stack, workers_with_tasks);
+    double new_area = process_worker_responses(stack, workers_with_tasks);
     total_area += new_area;
   }
+  release_all_workers(numprocs);
+
+  return total_area;
 }
 
 void
 worker(const int mypid) {
   while (1) {
-    double *params;
-    double start, end, f_start, f_end, estimate, larea, rarea;
-    MPI_STATUS status;
+    double params[5];
+    double start, mid, end, f_start, f_mid, f_end, estimate, larea, rarea;
+    MPI_Status status;
 
-    MPI_Recv(params, 5, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Recv(&params, 5, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
-    if (status->MPI_TAG == WORK_TAG) {
+    if (status.MPI_TAG == WORK_TAG) {
       start = params[0]; end = params[1]; f_start = params[2]; f_end = params[3]; estimate = params[4];
 
       mid = (start + end) / 2;
