@@ -74,28 +74,20 @@ main(int argc, char **argv) {
 
 #define WORK_TAG 0
 
-int
+void
 distribute_endpoints_to_workers(const int numprocs) {
-
-  int worker_number = 0;
-  int workers_with_tasks = 0;
-
   double slice_width = (B - A) / (numprocs - 1);
 
+  int worker_number = 0;
   while (++worker_number < numprocs) {
-
     double start, end;
     start = A + (worker_number - 1) * slice_width;
     end = A + worker_number * slice_width;
 
     double params[2] = { start, end };
 
-    workers_with_tasks++;
-    tasks_per_process[worker_number]++;
     MPI_Send(params, 2, MPI_DOUBLE, worker_number, WORK_TAG, MPI_COMM_WORLD);
   }
-
-  return workers_with_tasks;
 }
 
 double
@@ -147,6 +139,7 @@ worker(const int mypid) {
   MPI_Send(buffer, 2, MPI_DOUBLE, 0, WORK_TAG, MPI_COMM_WORLD);
 }
 
+/* Provided quad function with modification to track the number of calls */
 double
 quad( const double left, const double right,
       const double fleft, const double fright, const double lrarea, int *tasks) {
