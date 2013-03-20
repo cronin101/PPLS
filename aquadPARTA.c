@@ -1,6 +1,8 @@
 /* Parallel Programming Language Semantics Coursework 2
  * s0925570@sms.ed.ac.uk */
 
+/* BEGIN PROVIDED CODE */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -19,8 +21,6 @@ int *tasks_per_process;
 double farmer(const int);
 
 void worker(const int);
-
-/* BEGIN PROVIDED CODE */
 
 int
 main(int argc, char **argv) {
