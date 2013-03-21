@@ -199,3 +199,30 @@ worker(const int mypid) {
     }
   }
 }
+
+/* Description
+
+Each layer of the stack is used to keep track of the start and endpoints of each segment needing to be computed.
+Initially the range between the start and the endpoint are pushed onto the stack.
+
+The farmer loops through the process of popping regions off of the stack and distributing them to worker processes
+until either the stack is empty or it runs out of workers.
+Giving the worker a region is done by utilising MPI_Send with two MPI_DOUBLEs representing the start and end point to be calculated.
+The estimates and other calculations are all done on the worker in order to leave the farmer with as little work
+in the runtime loop as possible to improve the rate of job distribution.
+The WORK_TAG MPI_TAG is used to inform that worker that it should attempt to compute the area and then return its result.
+
+The farmer then recieves results from all utilised workers by using MPI_Recv once for each worker that has a task.
+If the worker responds with an ACCURATE_TAG MPI_TAG, the farmer adds its calculated MPI_DOUBLE segment area to the total.
+If the worker responds with an INACCURATE_TAG MPI_TAG, the farmer reads the attempted start and endpoint MPI_DOUBLEs
+then bisects the range and pushes it back onto the stack.
+This runtime loop continues until the stack is empty after all workers have been queried, this means that there must be
+an accurate result for each segment initially on the stack and the sum will be the total integral.
+When the area has been computed, the farmer sends a DIE_TAG MPI_TAG broadcast to each worker to allow them to exit their runtime loop.
+
+The worker processes loop calling MPI_Recv and then attempting to compute the area between the two MPI_DOUBLE endpoints they receive.
+If the result is accurate, they send back an MPI_DOUBLE with the area marked with the ACCURATE_TAG.
+If the result is innacurate, they send back the endpoints they received initially with the INACCURATE_TAG.
+This loop continues until the worker receive work tagged with a DIE_TAG MPI_TAG, at which point they exit.
+
+*/
