@@ -165,10 +165,13 @@ quad( const double left, const double right,
  *
  * Each worker receives its segment delimiters by calling MPI_Recv and reading the MPI_DOUBLE endpoints.
  * It then performs the sequential adaptive quadrature algorithm in order to calculate their segment area.
- * The segment area is returned to the farmer using MPI_Send of two MPI_DOUBLES. The first is the area, the second is the number of calls to 'quad'.
+ * The segment area is returned to the farmer using MPI_Send of two MPI_DOUBLES. The first is the area,
+ * the second is the number of calls to 'quad'.
  *
- * The farmer uses MPI_Recv to read the area and calls required. The total area is incremented by the segment area, the number of calls for that processes is recorded.
+ * The farmer uses MPI_Recv to read the area and calls required. The total area is incremented by the segment area,
+ * the number of calls for that processes is recorded.
  *
- * Each worker exits automatically since it only has one task to fulfil. The farmer exits returning the area after all segments have been received.
+ * Each worker exits automatically since it only has one task to fulfil.
+ * The farmer exits returning the area after all segments have been received.
  *
  */
